@@ -1,4 +1,4 @@
-package main
+package file
 
 import (
 	"crypto/sha256"
@@ -42,8 +42,8 @@ func Hash(filename string) (string, int64, string) {
 	return absfile, info.Size(), fmt.Sprintf("%x", h.Sum(nil))
 }
 
-// FileExists returns true if the given file exists
-func FileExists(filename string) bool {
+// Exists returns true if the given file exists
+func Exists(filename string) bool {
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		return false
 	}

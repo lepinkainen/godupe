@@ -1,4 +1,4 @@
-package main
+package db
 
 import (
 	"database/sql"
@@ -8,8 +8,8 @@ import (
 	"github.com/spf13/viper"
 )
 
-// InitDB initializes the database
-func InitDB() {
+// Init initializes the database
+func Init() {
 	db, err := sql.Open("sqlite3", viper.GetString("GODUPE_DB"))
 	if err != nil {
 		log.Fatal(err)
@@ -28,8 +28,8 @@ func InitDB() {
 	}
 }
 
-// PruneDB delete files that don't exist any more
-func PruneDB() {
+// Prune delete files that don't exist any more
+func Prune() {
 	db, err := sql.Open("sqlite3", viper.GetString("GODUPE_DB"))
 	if err != nil {
 		log.Fatal(err)
@@ -50,7 +50,7 @@ func PruneDB() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		if !FileExists(filename) {
+		if !Exists(filename) {
 			pruneList = append(pruneList, filename)
 		}
 	}
