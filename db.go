@@ -72,6 +72,33 @@ func PruneDB() {
 	}
 }
 
+// Dupe returns true if file has already been hashed
+func Dupe(hash string) bool {
+	db, err := sql.Open("sqlite3", viper.GetString("GODUPE_DB"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare("select count(*) from dupes where hash = ?")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer stmt.Close()
+
+	var count int
+	err = stmt.QueryRow(hash).Scan(&count)
+	if err != nil {
+		return false
+	}
+
+	if count > 0 {
+		return true
+	}
+
+	return false
+}
+
 // Exists returns true if file has already been hashed
 func Exists(filename string) bool {
 	db, err := sql.Open("sqlite3", viper.GetString("GODUPE_DB"))
@@ -99,7 +126,7 @@ func Exists(filename string) bool {
 	return false
 }
 
-// SaveHash stores the file hash to the database
+// Save stores the file and its metadata to the DB
 func Save(filename string, size int64, hash string) {
 	db, err := sql.Open("sqlite3", viper.GetString("GODUPE_DB"))
 	if err != nil {

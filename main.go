@@ -24,6 +24,10 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 	fmt.Printf("hashing: %s\n", path)
 	filename, size, hash := Hash(path)
 
+	if Dupe(hash) {
+		fmt.Println("DUPE FOUND")
+	}
+
 	Save(filename, size, hash)
 
 	return nil
@@ -31,10 +35,13 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 
 func main() {
 	InitDB()
-	//pruneDB()
+	// TODO: only run if option provided
+	// This WILL delete everything if a mount isn't available for example
+	//PruneDB()
 
 	viper.AutomaticEnv()
 	viper.SetDefault("GODUPE_DB", "./dupes.db")
 
+	fmt.Printf("Using database %s", viper.GetString("GODUPE_DB"))
 	filepath.Walk(os.Args[1], walkFunc)
 }
