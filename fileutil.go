@@ -12,7 +12,7 @@ import (
 )
 
 // Hash a file, return its absolute path and SHA256
-func Hash(filename string) (string, string) {
+func Hash(filename string) (string, int64, string) {
 
 	absfile, _ := filepath.Abs(filename)
 
@@ -24,21 +24,22 @@ func Hash(filename string) (string, string) {
 
 	info, err := f.Stat()
 	if err != nil {
-		return "", ""
+		return "", 0, ""
 	}
 
-	h := sha256.New()
+	// Create progress bar reader
 	bar := pb.New((int(info.Size()))).SetUnits(pb.U_BYTES)
 	bar.Start()
 	reader := bar.NewProxyReader(f)
 
+	h := sha256.New()
 	if _, err := io.Copy(h, reader); err != nil {
 		log.Fatal(err)
 	}
 
 	bar.Finish()
 
-	return absfile, fmt.Sprintf("%x", h.Sum(nil))
+	return absfile, info.Size(), fmt.Sprintf("%x", h.Sum(nil))
 }
 
 // FileExists returns true if the given file exists

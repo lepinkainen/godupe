@@ -100,7 +100,7 @@ func Exists(filename string) bool {
 }
 
 // SaveHash stores the file hash to the database
-func SaveHash(filename, hash string) {
+func Save(filename string, size int64, hash string) {
 	db, err := sql.Open("sqlite3", viper.GetString("GODUPE_DB"))
 	if err != nil {
 		log.Fatal(err)

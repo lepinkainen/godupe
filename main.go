@@ -22,9 +22,9 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 	}
 
 	fmt.Printf("hashing: %s\n", path)
-	filename, hash := Hash(path)
+	filename, size, hash := Hash(path)
 
-	SaveHash(filename, hash)
+	Save(filename, size, hash)
 
 	return nil
 }
