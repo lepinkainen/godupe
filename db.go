@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-// initialize database, create table(s)
+// InitDB initializes the database
 func InitDB() {
 	db, err := sql.Open("sqlite3", viper.GetString("GODUPE_DB"))
 	if err != nil {
@@ -99,6 +99,7 @@ func Exists(filename string) bool {
 	return false
 }
 
+// SaveHash stores the file hash to the database
 func SaveHash(filename, hash string) {
 	db, err := sql.Open("sqlite3", viper.GetString("GODUPE_DB"))
 	if err != nil {
@@ -111,7 +112,7 @@ func SaveHash(filename, hash string) {
 		log.Fatal(err)
 	}
 	// upsert path and hash
-	stmt, err := tx.Prepare("insert into dupes(path, hash) values(?, ?) on conflict(path) do update set hash=?")
+	stmt, err := tx.Prepare("insert into dupes(path, hash, date) values(?, ?, CURRENT_TIMESTAMP) on conflict(path) do update set hash=?")
 	if err != nil {
 		log.Fatal(err)
 	}

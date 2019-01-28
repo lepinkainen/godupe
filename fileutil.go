@@ -41,7 +41,7 @@ func Hash(filename string) (string, string) {
 	return absfile, fmt.Sprintf("%x", h.Sum(nil))
 }
 
-// Return true if the given file exists
+// FileExists returns true if the given file exists
 func FileExists(filename string) bool {
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		return false
