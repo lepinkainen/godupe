@@ -12,6 +12,15 @@ import (
 )
 
 func walkFunc(path string, info os.FileInfo, err error) error {
+	// handle situations when a file isn't really a file or directory
+	// usually files with really weird filenames on network drives
+	defer func() {
+		if x := recover(); x != nil {
+			fmt.Printf("Unreadable file: %s\n", path)
+			fmt.Println("Recovered in ", x)
+		}
+	}()
+
 	// We can't do anything to directories
 	if info.IsDir() {
 		return nil
