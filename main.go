@@ -32,6 +32,8 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 		return nil
 	}
 
+	// TODO: Add a goroutine for hashing in parallel?
+	// TODO: Maybe with a configurable amount of workers and a limited channel size
 	fmt.Printf("hashing: %s\n", path)
 	filename, size, hash := file.Hash(path)
 
@@ -53,6 +55,7 @@ func main() {
 	viper.AutomaticEnv()
 	viper.SetDefault("GODUPE_DB", "./dupes.db")
 
+	// TODO: use cobra as a base for this
 	fmt.Printf("Using database %s\n", viper.GetString("GODUPE_DB"))
 	if len(os.Args) <= 1 {
 		fmt.Println("usage: godupe [path]")

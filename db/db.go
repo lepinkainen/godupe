@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"sync"
 
 	"github.com/spf13/viper"
 )
@@ -128,6 +129,11 @@ func Exists(filename string) bool {
 
 // Save stores the file and its metadata to the DB
 func Save(filename string, size int64, hash string) {
+	// sqlite can handle multiple concurrent reads, writes - not so much
+	// make it doubleplusgood certain we're not writing in parallel
+	var mutex = &sync.Mutex{}
+	mutex.Lock()
+
 	db, err := sql.Open("sqlite3", viper.GetString("GODUPE_DB"))
 	if err != nil {
 		log.Fatal(err)
@@ -149,4 +155,6 @@ func Save(filename string, size int64, hash string) {
 		log.Fatal(err)
 	}
 	tx.Commit()
+
+	mutex.Unlock()
 }
