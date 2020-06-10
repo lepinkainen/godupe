@@ -53,6 +53,10 @@ func main() {
 	viper.AutomaticEnv()
 	viper.SetDefault("GODUPE_DB", "./dupes.db")
 
-	fmt.Printf("Using database %s", viper.GetString("GODUPE_DB"))
+	fmt.Printf("Using database %s\n", viper.GetString("GODUPE_DB"))
+	if len(os.Args) <= 1 {
+		fmt.Println("usage: godupe [path]")
+		return
+	}
 	filepath.Walk(os.Args[1], walkFunc)
 }
