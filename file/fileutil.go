@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	pb "gopkg.in/cheggaaa/pb.v1"
+	pb "github.com/cheggaaa/pb/v3"
 )
 
 // Hash a file, return its absolute path and SHA256
@@ -28,8 +28,9 @@ func Hash(filename string) (string, int64, string) {
 	}
 
 	// Create progress bar reader
-	bar := pb.New((int(info.Size()))).SetUnits(pb.U_BYTES)
-	bar.Start()
+	//bar := pb.New((int(info.Size())))
+	bar := pb.Full.Start64(info.Size())
+	bar.Set(pb.SIBytesPrefix, true)
 	reader := bar.NewProxyReader(f)
 
 	h := sha256.New()
