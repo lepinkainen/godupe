@@ -11,7 +11,7 @@ import (
 	pb "github.com/cheggaaa/pb/v3"
 )
 
-// Hash a file, return its absolute path and SHA256
+// Hash a file, return its absolute path, size and SHA256
 func Hash(filename string) (string, int64, string) {
 
 	absfile, _ := filepath.Abs(filename)

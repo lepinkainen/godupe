@@ -48,12 +48,14 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 
 func main() {
 	db.Init()
-	// TODO: only run if option provided
-	// This WILL delete everything if a mount isn't available for example
-	//Prune()
 
 	viper.AutomaticEnv()
 	viper.SetDefault("GODUPE_DB", "./dupes.db")
+
+	// TODO: only run if option provided
+	// This WILL delete everything if a mount isn't available for example
+	//db.Prune()
+	//return
 
 	// TODO: use cobra as a base for this
 	fmt.Printf("Using database %s\n", viper.GetString("GODUPE_DB"))

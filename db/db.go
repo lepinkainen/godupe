@@ -45,6 +45,7 @@ func Prune() {
 
 	var pruneList []string
 
+	// TODO: Progress bar?
 	for rows.Next() {
 		var filename string
 		err = rows.Scan(&filename)
@@ -52,6 +53,7 @@ func Prune() {
 			log.Fatal(err)
 		}
 		if !Exists(filename) {
+			fmt.Printf("Pruning %s\n", filename)
 			pruneList = append(pruneList, filename)
 		}
 	}
