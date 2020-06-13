@@ -20,28 +20,46 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 			fmt.Println("Recovered in ", x)
 		}
 	}()
+	partial := viper.GetBool("GODUPE_PARTIAL")
 
 	// We can't do anything to directories
 	if info.IsDir() {
 		return nil
 	}
 
-	// dont re-hash existing files
-	if db.Exists(path) {
-		fmt.Printf("skipping: %s\n", path)
-		return nil
+	res := db.Exists(path)
+	// if we are doing partial hashes and partial or full hash exists, skip
+
+	if partial {
+		if res == db.HashTypePartial || res == db.HashTypeFull {
+			fmt.Printf("skipping: %s\n", path)
+			return nil
+		}
+	} else {
+		// for full hash mode, we require the full hash, if we only have a partial, recalculate
+		if res == db.HashTypeFull {
+			fmt.Printf("skipping: %s\n", path)
+			return nil
+		}
 	}
 
 	// TODO: Add a goroutine for hashing in parallel?
 	// TODO: Maybe with a configurable amount of workers and a limited channel size
-	fmt.Printf("hashing: %s\n", path)
-	filename, size, hash := file.Hash(path)
+	if partial {
+		fmt.Printf("hashing (partial): %s\n", path)
+	} else {
+		fmt.Printf("hashing: %s\n", path)
 
-	if db.Dupe(hash) {
-		fmt.Println("DUPE FOUND")
 	}
+	filename, size, hash := file.Hash(path, partial)
 
-	db.Save(filename, size, hash)
+	/*
+		if db.Dupe(hash) {
+			fmt.Println("DUPE FOUND")
+		}
+	*/
+
+	db.Save(filename, size, hash, partial)
 
 	return nil
 }
@@ -51,6 +69,7 @@ func main() {
 
 	viper.AutomaticEnv()
 	viper.SetDefault("GODUPE_DB", "./dupes.db")
+	viper.SetDefault("GODUPE_PARTIAL", true)
 
 	// TODO: only run if option provided
 	// This WILL delete everything if a mount isn't available for example

@@ -11,8 +11,13 @@ import (
 	pb "github.com/cheggaaa/pb/v3"
 )
 
+const (
+	mib         = 1048576 // 1 MiB
+	partialSize = 2 * mib
+)
+
 // Hash a file, return its absolute path, size and SHA256
-func Hash(filename string) (string, int64, string) {
+func Hash(filename string, partial bool) (string, int64, string) {
 
 	absfile, _ := filepath.Abs(filename)
 
@@ -27,15 +32,34 @@ func Hash(filename string) (string, int64, string) {
 		return "", 0, ""
 	}
 
+	var hashSize int64
+	if info.Size() < partialSize {
+		hashSize = info.Size()
+	} else {
+		hashSize = partialSize
+	}
+
+	// Only use progress bar for files over this size
+	//var useBar = info.Size() > (1 * 1000 * 1000)
+	//useBar := true
+
 	// Create progress bar reader
-	//bar := pb.New((int(info.Size())))
-	bar := pb.Full.Start64(info.Size())
+	var bar *pb.ProgressBar
+	bar = pb.Simple.Start64(hashSize)
 	bar.Set(pb.SIBytesPrefix, true)
 	reader := bar.NewProxyReader(f)
 
 	h := sha256.New()
-	if _, err := io.Copy(h, reader); err != nil {
-		log.Fatal(err)
+
+	// Only do a partial hash
+	if partial {
+		if _, err := io.CopyN(h, reader, hashSize); err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		if _, err := io.Copy(h, reader); err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	bar.Finish()
