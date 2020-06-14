@@ -16,8 +16,8 @@ import (
 
 // Hash a file, return its absolute path, size and SHA256
 func Hash(filename string) (string, int64, string) {
-	partial := viper.GetBool("GODUPE_PARTIAL")
-	partialSize := viper.GetInt64("GODUPE_PARTIAL_LIMIT")
+	partial := viper.GetBool("partial")
+	partialSize := viper.GetInt64("limit") * 1048576
 
 	absfile, _ := filepath.Abs(filename)
 

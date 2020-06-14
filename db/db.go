@@ -3,23 +3,21 @@ package db
 import (
 	"database/sql"
 	"fmt"
-
-	log "github.com/sirupsen/logrus"
-
 	"sync"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
 
 // Init initializes the database
 func Init() {
-	db, err := sql.Open("sqlite3", viper.GetString("GODUPE_DB"))
+	db, err := sql.Open("sqlite3", viper.GetString("db"))
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
 
-	sqlStmt := "create table dupes (path text not null primary key, hash text, date);"
+	sqlStmt := "create table dupes (path text not null primary key, hash text, partialhash text, date);"
 
 	_, err = db.Exec(sqlStmt)
 	if err != nil {
@@ -31,9 +29,9 @@ func Init() {
 	}
 }
 
-// Prune delete files that don't exist any more
+// Prune deletes files that don't exist any more
 func Prune() {
-	db, err := sql.Open("sqlite3", viper.GetString("GODUPE_DB"))
+	db, err := sql.Open("sqlite3", viper.GetString("db"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -80,7 +78,7 @@ func Prune() {
 
 // Dupe returns true if file has already been hashed
 func Dupe(hash, partialhash string) bool {
-	db, err := sql.Open("sqlite3", viper.GetString("GODUPE_DB"))
+	db, err := sql.Open("sqlite3", viper.GetString("db"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -121,7 +119,7 @@ const (
 
 // Exists returns true if file has already been hashed
 func Exists(filename string) HashType {
-	db, err := sql.Open("sqlite3", viper.GetString("GODUPE_DB"))
+	db, err := sql.Open("sqlite3", viper.GetString("db"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -155,8 +153,8 @@ func Exists(filename string) HashType {
 
 // Save stores the file and its metadata to the DB
 func Save(filename string, size int64, hash string) {
-	partial := viper.GetBool("GODUPE_PARTIAL")
-	partialSize := viper.GetInt64("GODUPE_PARTIAL_LIMIT")
+	partial := viper.GetBool("partial")
+	partialSize := viper.GetInt64("limit") * 1048576
 
 	// TODO: In partial mode if size < partial limit, save partial hash also in full hash
 	// Maybe recurse the func and do two saves?
@@ -167,7 +165,7 @@ func Save(filename string, size int64, hash string) {
 	var mutex = &sync.Mutex{}
 	mutex.Lock()
 
-	db, err := sql.Open("sqlite3", viper.GetString("GODUPE_DB"))
+	db, err := sql.Open("sqlite3", viper.GetString("db"))
 	if err != nil {
 		log.Fatal(err)
 	}
