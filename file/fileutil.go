@@ -33,6 +33,7 @@ func Hash(filename string) (string, int64, string) {
 	}
 
 	var hashSize int64
+	// If file is smaller than partial size, don't try to read more than the file's size
 	if info.Size() < partialSize {
 		hashSize = info.Size()
 	} else {
@@ -45,7 +46,7 @@ func Hash(filename string) (string, int64, string) {
 
 	// Create progress bar reader
 	var bar *pb.ProgressBar
-	bar = pb.Simple.Start64(hashSize)
+	bar = pb.Simple.Start64(info.Size())
 	bar.Set(pb.SIBytesPrefix, true)
 	reader := bar.NewProxyReader(f)
 
