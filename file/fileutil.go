@@ -4,20 +4,20 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
-	"log"
+
+	log "github.com/sirupsen/logrus"
+
 	"os"
 	"path/filepath"
 
 	pb "github.com/cheggaaa/pb/v3"
-)
-
-const (
-	mib         = 1048576 // 1 MiB
-	partialSize = 2 * mib
+	"github.com/spf13/viper"
 )
 
 // Hash a file, return its absolute path, size and SHA256
-func Hash(filename string, partial bool) (string, int64, string) {
+func Hash(filename string) (string, int64, string) {
+	partial := viper.GetBool("GODUPE_PARTIAL")
+	partialSize := viper.GetInt64("GODUPE_PARTIAL_LIMIT")
 
 	absfile, _ := filepath.Abs(filename)
 

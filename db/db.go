@@ -3,7 +3,9 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"log"
+
+	log "github.com/sirupsen/logrus"
+
 	"sync"
 
 	"github.com/spf13/viper"
@@ -52,7 +54,8 @@ func Prune() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		if !Exists(filename) {
+		// File is in DB, but not in filesystem
+		if Exists(filename) != HashTypeNotExist {
 			fmt.Printf("Pruning %s\n", filename)
 			pruneList = append(pruneList, filename)
 		}
@@ -76,21 +79,21 @@ func Prune() {
 }
 
 // Dupe returns true if file has already been hashed
-func Dupe(hash string) bool {
+func Dupe(hash, partialhash string) bool {
 	db, err := sql.Open("sqlite3", viper.GetString("GODUPE_DB"))
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
 
-	stmt, err := db.Prepare("select count(*) from dupes where hash = ?")
+	stmt, err := db.Prepare("select count(*) from dupes where hash = ? or partialhash = ?")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer stmt.Close()
 
 	var count int
-	err = stmt.QueryRow(hash).Scan(&count)
+	err = stmt.QueryRow(hash, partialhash).Scan(&count)
 	if err != nil {
 		return false
 	}
@@ -102,35 +105,63 @@ func Dupe(hash string) bool {
 	return false
 }
 
+// HashType stores the way the file has been hashed
+type HashType string
+
+const (
+	// HashTypeNotExist Hash not in DB
+	HashTypeNotExist HashType = "NOTEXIST"
+	// HashTypeNone = not hashed
+	HashTypeNone HashType = "NONE"
+	// HashTypeFull = full file hashed
+	HashTypeFull HashType = "FULL"
+	// HashTypePartial = First X MB of file hashed
+	HashTypePartial HashType = "PARTIAL"
+)
+
 // Exists returns true if file has already been hashed
-func Exists(filename string) bool {
+func Exists(filename string) HashType {
 	db, err := sql.Open("sqlite3", viper.GetString("GODUPE_DB"))
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
 
-	stmt, err := db.Prepare("select count(*) from dupes where path = ?")
+	stmt, err := db.Prepare("select path, hash, partialhash from dupes where path = ?")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer stmt.Close()
 
-	var count int
-	err = stmt.QueryRow(filename).Scan(&count)
-	if err != nil {
-		return false
+	var path, hash, partialhash string
+	row := stmt.QueryRow(filename)
+	err = row.Scan(&path, &hash, &partialhash)
+	if err == sql.ErrNoRows {
+		// No row returned, not hashed
+		return HashTypeNotExist
 	}
 
-	if count > 0 {
-		return true
+	// Full hash, no need for partial
+	if hash != "" {
+		return HashTypeFull
+	}
+	if partialhash != "" {
+		return HashTypePartial
 	}
 
-	return false
+	// In DB but not hashed
+	return HashTypeNone
 }
 
 // Save stores the file and its metadata to the DB
 func Save(filename string, size int64, hash string) {
+	partial := viper.GetBool("GODUPE_PARTIAL")
+	partialSize := viper.GetInt64("GODUPE_PARTIAL_LIMIT")
+
+	// TODO: In partial mode if size < partial limit, save partial hash also in full hash
+	// Maybe recurse the func and do two saves?
+	// Or branch the save logic one more time
+
 	// sqlite can handle multiple concurrent reads, writes - not so much
 	// make it doubleplusgood certain we're not writing in parallel
 	var mutex = &sync.Mutex{}
@@ -146,15 +177,47 @@ func Save(filename string, size int64, hash string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// upsert path and hash
-	stmt, err := tx.Prepare("insert into dupes(path, hash, date) values(?, ?, CURRENT_TIMESTAMP) on conflict(path) do update set hash=?")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer stmt.Close()
-	_, err = stmt.Exec(filename, hash, hash)
-	if err != nil {
-		log.Fatal(err)
+
+	var stmt *sql.Stmt
+
+	// If we are doing partial hashing, save as partial hash
+	if partial {
+		// using partial hashing, file is smaller than partial limit, save to both full and partial hash (as they will be the same)
+		if size < partialSize {
+			stmt, err = tx.Prepare("insert into dupes(path, hash, partialhash, date) values(?, ?, ?, CURRENT_TIMESTAMP) on conflict(path) do update set partialhash=?, hash=?")
+
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer stmt.Close()
+			_, err = stmt.Exec(filename, hash, hash, hash, hash)
+			if err != nil {
+				log.Fatal(err)
+			}
+		} else {
+			// Partial, save to partialhash
+			stmt, err = tx.Prepare("insert into dupes(path, partialhash, date) values(?, ?, CURRENT_TIMESTAMP) on conflict(path) do update set partialhash=?")
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer stmt.Close()
+			_, err = stmt.Exec(filename, hash, hash)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	} else {
+		// full hash
+		stmt, err = tx.Prepare("insert into dupes(path, hash, date) values(?, ?, CURRENT_TIMESTAMP) on conflict(path) do update set hash=?")
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer stmt.Close()
+		_, err = stmt.Exec(filename, hash, hash)
+		if err != nil {
+			log.Fatal(err)
+		}
+
 	}
 	tx.Commit()
 

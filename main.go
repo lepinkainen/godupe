@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/lepinkainen/godupe/db"
 	"github.com/lepinkainen/godupe/file"
 	_ "github.com/mattn/go-sqlite3"
@@ -16,8 +18,8 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 	// usually files with really weird filenames on network drives
 	defer func() {
 		if x := recover(); x != nil {
-			fmt.Printf("Unreadable file: %s\n", path)
-			fmt.Println("Recovered in ", x)
+			log.Errorf("Unreadable file: %s\n", path)
+			log.Errorf("Recovered in ", x)
 		}
 	}()
 	partial := viper.GetBool("GODUPE_PARTIAL")
@@ -27,18 +29,20 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 		return nil
 	}
 
+	// TODO: maybe load the full list of stuff to memory to speed up the process?
+	// Benchmark it?
 	res := db.Exists(path)
 	// if we are doing partial hashes and partial or full hash exists, skip
 
 	if partial {
 		if res == db.HashTypePartial || res == db.HashTypeFull {
-			fmt.Printf("skipping: %s\n", path)
+			log.Printf("skipping: %s\n", path)
 			return nil
 		}
 	} else {
 		// for full hash mode, we require the full hash, if we only have a partial, recalculate
 		if res == db.HashTypeFull {
-			fmt.Printf("skipping: %s\n", path)
+			log.Printf("skipping: %s\n", path)
 			return nil
 		}
 	}
@@ -46,20 +50,20 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 	// TODO: Add a goroutine for hashing in parallel?
 	// TODO: Maybe with a configurable amount of workers and a limited channel size
 	if partial {
-		fmt.Printf("hashing (partial): %s\n", path)
+		log.Printf("hashing (partial): %s\n", path)
 	} else {
-		fmt.Printf("hashing: %s\n", path)
+		log.Printf("hashing: %s\n", path)
 
 	}
-	filename, size, hash := file.Hash(path, partial)
+	filename, size, hash := file.Hash(path)
+	db.Save(filename, size, hash)
 
 	/*
-		if db.Dupe(hash) {
-			fmt.Println("DUPE FOUND")
-		}
+		// dupe finding should really be a separate operation on the UI side
+			if db.Dupe(hash) {
+				fmt.Println("DUPE FOUND")
+			}
 	*/
-
-	db.Save(filename, size, hash, partial)
 
 	return nil
 }
@@ -70,6 +74,11 @@ func main() {
 	viper.AutomaticEnv()
 	viper.SetDefault("GODUPE_DB", "./dupes.db")
 	viper.SetDefault("GODUPE_PARTIAL", true)
+
+	const mib = 1048576 // 1 MiB
+	const partialSize = 2 * mib
+
+	viper.SetDefault("GODUPE_PARTIAL_LIMIT", partialSize)
 
 	// TODO: only run if option provided
 	// This WILL delete everything if a mount isn't available for example
