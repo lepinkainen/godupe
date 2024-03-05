@@ -10,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
-	pb "github.com/cheggaaa/pb/v3"
+	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/viper"
 )
 
@@ -45,20 +45,18 @@ func Hash(filename string) (string, int64, string) {
 	//useBar := true
 
 	// Create progress bar reader
-	var bar *pb.ProgressBar
-	bar = pb.Simple.Start64(info.Size())
-	bar.Set(pb.SIBytesPrefix, true)
-	reader := bar.NewProxyReader(f)
+	bar := progressbar.DefaultBytes(info.Size())
+	bar.Describe(filename)
 
 	h := sha256.New()
 
 	// Only do a partial hash
 	if partial {
-		if _, err := io.CopyN(h, reader, hashSize); err != nil {
+		if _, err := io.CopyN(io.MultiWriter(h, bar), f, hashSize); err != nil {
 			log.Fatal(err)
 		}
 	} else {
-		if _, err := io.Copy(h, reader); err != nil {
+		if _, err := io.Copy(io.MultiWriter(h, bar), f); err != nil {
 			log.Fatal(err)
 		}
 	}
