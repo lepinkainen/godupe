@@ -32,6 +32,11 @@ func Hash(filename string) (string, int64, string) {
 		return "", 0, ""
 	}
 
+	if info.Size() < 10*1024*1024 {
+		log.Debugf("Skipping small file: %s\n", filename)
+		return "", 0, ""
+	}
+
 	var hashSize int64
 	// If file is smaller than partial size, don't try to read more than the file's size
 	if info.Size() < partialSize {

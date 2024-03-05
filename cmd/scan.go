@@ -93,10 +93,12 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 
 	// We can't do anything to directories
 	if info.IsDir() {
+		log.Infof("processing: %s\n", path)
 		return nil
 	}
 
 	// TODO: maybe load the full list of stuff to memory to speed up the process?
+	// TODO: is is possible to remember stuff in a recursive function?
 	// Benchmark it?
 	absfilepath, _ := filepath.Abs(path)
 	res := db.Exists(absfilepath)
@@ -124,6 +126,13 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 
 	}
 	filename, size, hash := file.Hash(path)
+	// TODO: This is a complete hack, the f.Stat call should be done here
+	// skip small files for now
+	if size == 0 {
+		log.Debugf("skipping empty file: %s\n", path)
+		return nil
+	}
+
 	db.Save(filename, size, hash)
 
 	/*
