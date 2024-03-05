@@ -10,7 +10,7 @@ tasks:
   build:
     deps: [vet]
     cmds:
-      - go build -v -ldflags="-X main.Version={{.GIT_COMMIT}}" -o {{.EXECUTABLE}} main.go
+      - go build -v -ldflags="-X main.Version={{.GIT_COMMIT}}" -o {{.EXECUTABLE}}
     sources:
       - ./*.go
     generates:

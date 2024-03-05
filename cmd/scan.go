@@ -22,6 +22,7 @@ THE SOFTWARE.
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -42,13 +43,7 @@ var scanCmd = &cobra.Command{
 	Use:   "scan [directory]",
 	Args:  cobra.MinimumNArgs(1),
 	Short: "Scan and add file checksums to DB",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: scan,
+	Run:   scan,
 }
 
 func init() {
@@ -60,10 +55,28 @@ func init() {
 	// and all subcommands, e.g.:
 	// scanCmd.PersistentFlags().String("foo", "", "A help for foo")
 
+	// Get user's configuration directory
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		fmt.Println("Error getting configuration directory:", err)
+		return
+	}
+
+	// Create the godupe directory if it doesn't exist
+	godupeDir := filepath.Join(configDir, "godupe")
+	err = os.MkdirAll(godupeDir, os.ModePerm)
+	if err != nil {
+		fmt.Println("Error creating directory:", err)
+		return
+	}
+
+	// Construct the full path to the database file
+	dbPath := filepath.Join(godupeDir, "godupe.db")
+
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	scanCmd.Flags().BoolP("partial", "p", false, "Only read the first X MiB of a file to generate a partial hash")
-	scanCmd.Flags().String("db", "./dupes.db", "DB file to use")
+	scanCmd.Flags().String("db", dbPath, "DB file to use")
 	scanCmd.Flags().Int64("limit", 2, "Amount of MiB to read when doing partial scan")
 }
 
@@ -85,7 +98,8 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 
 	// TODO: maybe load the full list of stuff to memory to speed up the process?
 	// Benchmark it?
-	res := db.Exists(path)
+	absfilepath, _ := filepath.Abs(path)
+	res := db.Exists(absfilepath)
 	// if we are doing partial hashes and partial or full hash exists, skip
 
 	if partial {
@@ -104,9 +118,9 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 	// TODO: Add a goroutine for hashing in parallel?
 	// TODO: Maybe with a configurable amount of workers and a limited channel size
 	if partial {
-		log.Infof("hashing (partial): %s\n", path)
+		log.Debugf("hashing (partial): %s\n", path)
 	} else {
-		log.Infof("hashing: %s\n", path)
+		log.Debugf("hashing: %s\n", path)
 
 	}
 	filename, size, hash := file.Hash(path)
@@ -123,7 +137,6 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 }
 
 func scan(cmd *cobra.Command, args []string) {
-	db.Init()
 
 	viper.AutomaticEnv()
 
@@ -131,8 +144,8 @@ func scan(cmd *cobra.Command, args []string) {
 	viper.BindPFlag("db", cmd.Flags().Lookup("db"))
 	viper.BindPFlag("limit", cmd.Flags().Lookup("limit"))
 
-	const mib = 1048576 // 1 MiB
-	const partialSize = 2 * mib
+	//const mib = 1048576 // 1 MiB
+	//const partialSize = 2 * mib
 
 	if viper.GetBool("verbose") {
 		log.SetLevel(log.DebugLevel)
@@ -143,5 +156,6 @@ func scan(cmd *cobra.Command, args []string) {
 		log.Infoln("Running partial scan")
 	}
 
+	db.Init()
 	filepath.Walk(args[0], walkFunc)
 }

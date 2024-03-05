@@ -17,6 +17,8 @@ func Init() {
 	}
 	defer db.Close()
 
+	log.Debugf("Initializing DB in %s", viper.GetString("db"))
+
 	sqlStmt := "create table dupes (path text not null primary key, hash text, partialhash text, date);"
 
 	_, err = db.Exec(sqlStmt)
@@ -182,7 +184,7 @@ func Save(filename string, size int64, hash string) {
 	if partial {
 		// using partial hashing, file is smaller than partial limit, save to both full and partial hash (as they will be the same)
 		if size < partialSize {
-			stmt, err = tx.Prepare("insert into dupes(path, hash, partialhash, date) values(?, ?, ?, CURRENT_TIMESTAMP) on conflict(path) do update set partialhash=?, hash=?")
+			stmt, err = tx.Prepare("insert into dupes(path, hash, partialhash, date) values(?, ?, ?, CURRENT_TIMESTAMP) on conflict(path) do update set partialhash=?, hash=?, date=CURRENT_TIMESTAMP")
 
 			if err != nil {
 				log.Fatal(err)
@@ -211,13 +213,17 @@ func Save(filename string, size int64, hash string) {
 			log.Fatal(err)
 		}
 		defer stmt.Close()
+		log.Debugf("Inserting: %s - %s\n", filename, hash)
 		_, err = stmt.Exec(filename, hash, hash)
 		if err != nil {
 			log.Fatal(err)
 		}
 
 	}
-	tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	mutex.Unlock()
 }
