@@ -14,3 +14,5 @@
 vendor/
 dupes.db
 godupe
+.task/checksum/build
+.task/checksum/vet

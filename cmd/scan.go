@@ -73,7 +73,7 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("Unreadable file: %s\n", path)
-			log.Errorf("Recovered in ", x)
+			log.Errorf("Recovered in %s", x)
 		}
 	}()
 	partial := viper.GetBool("partial")

@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+dotenv: [".env"]
+
+vars:
+  EXECUTABLE: godupe
+
+tasks:
+  build:
+    deps: [vet]
+    cmds:
+      - go build -v -ldflags="-X main.Version={{.GIT_COMMIT}}" -o {{.EXECUTABLE}} main.go
+    sources:
+      - ./*.go
+    generates:
+      - "{{.EXECUTABLE}}"
+    vars:
+      GIT_COMMIT:
+        sh: git log -n 1 --format=%h
+
+  vet:
+    cmds:
+      - go vet ./...
+    sources:
+      - ./*.go
+  publish:
+    deps: [build]
+    cmds:
+      - echo "Publishing to bin"
+      - mkdir -p $HOME/bin/
+      - mv {{.EXECUTABLE}} $HOME/bin/
