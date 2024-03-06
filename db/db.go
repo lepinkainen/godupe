@@ -19,16 +19,20 @@ func Init() {
 
 	log.Debugf("Initializing DB in %s", viper.GetString("db"))
 
-	sqlStmt := "create table dupes (path text not null primary key, hash text, partialhash text, date);"
+	// Create dupes table
+	sqlStmt := "CREATE TABLE IF NOT EXISTS dupes (path text not null primary key, hash text, partialhash text, date);"
 
 	_, err = db.Exec(sqlStmt)
 	if err != nil {
-		// Ignore if table is already created
-		if err.Error() == "table dupes already exists" {
-			return
-		}
-		log.Printf("%q: %s\n", err, sqlStmt)
+		log.Errorf("%q: %s\n", err, sqlStmt)
 	}
+
+	// we're doing a ton of operations on the path column, index it to aid performance a bit
+	_, err = db.Exec("CREATE INDEX IF NOT EXISTS idx_path ON dupes (path);")
+	if err != nil {
+		log.Errorf("%q: %s\n", err, sqlStmt)
+	}
+
 }
 
 // Prune deletes files that don't exist any more
@@ -118,6 +122,38 @@ const (
 	// HashTypePartial = First X MB of file hashed
 	HashTypePartial HashType = "PARTIAL"
 )
+
+func ExistsAll(filenames []string) bool {
+	db, err := sql.Open("sqlite3", viper.GetString("db"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare("select path, hash, partialhash from dupes where path = ?")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer stmt.Close()
+
+	for _, filename := range filenames {
+		var path, hash, partialhash string
+		row := stmt.QueryRow(filename)
+		err := row.Scan(&path, &hash, &partialhash)
+		if err == sql.ErrNoRows {
+			// File not found in database
+			return false
+		}
+		// In database, but no hash -> we need to calculate it
+		if hash == "" {
+			return false
+		}
+		// Only check for existence, ignore hash types
+	}
+
+	// All files found
+	return true
+}
 
 // Exists returns true if file has already been hashed
 func Exists(filename string) HashType {
