@@ -14,8 +14,27 @@ import (
 	"github.com/spf13/viper"
 )
 
+// Helper function to list files in a directory and get their absolute paths
+func WalkDirFiles(dirPath string) ([]string, error) {
+	files := []string{}
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			absPath, err := filepath.Abs(filepath.Join(dirPath, entry.Name()))
+			if err != nil {
+				return nil, err
+			}
+			files = append(files, absPath)
+		}
+	}
+	return files, nil
+}
+
 // Hash a file, return its absolute path, size and SHA256
-func Hash(filename string) (string, int64, string) {
+func Hash(filename string) (string, int64, string, error) {
 	partial := viper.GetBool("partial")
 	partialSize := viper.GetInt64("limit") * 1048576
 
@@ -29,12 +48,13 @@ func Hash(filename string) (string, int64, string) {
 
 	info, err := f.Stat()
 	if err != nil {
-		return "", 0, ""
+		return "", 0, "", err
 	}
 
 	if info.Size() < 10*1024*1024 {
 		log.Debugf("Skipping small file: %s\n", filename)
-		return "", 0, ""
+		// return error
+		return "", 0, "", fmt.Errorf("Skipping small file: %s", filename)
 	}
 
 	var hashSize int64
@@ -68,7 +88,7 @@ func Hash(filename string) (string, int64, string) {
 
 	bar.Finish()
 
-	return absfile, info.Size(), fmt.Sprintf("%x", h.Sum(nil))
+	return absfile, info.Size(), fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
 // Exists returns true if the given file exists

@@ -23,6 +23,7 @@ package cmd
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -80,6 +81,74 @@ func init() {
 	scanCmd.Flags().Int64("limit", 2, "Amount of MiB to read when doing partial scan")
 }
 
+func walkDirFunc(path string, d fs.DirEntry, err error) error {
+	if err != nil {
+		log.Errorf("Error accessing directory: %s\n", path)
+		return err
+	}
+
+	// Skip if all files are already in database
+	if d.IsDir() {
+		files, err := file.WalkDirFiles(path)
+		log.Infof("processing: %s [%d files]\n", path, len(files))
+		if err != nil {
+			return err
+		}
+
+		skip := db.ExistsAll(files)
+
+		if skip {
+			log.Debug("-> Skip - already processed")
+			return filepath.SkipDir
+		}
+
+		return nil
+	}
+
+	// Handle potential panics during file access
+	defer func() {
+		if x := recover(); x != nil {
+			log.Errorf("Unreadable file: %s\n", path)
+			log.Errorf("Recovered in %s", x)
+		}
+	}()
+
+	absfilepath, err := filepath.Abs(path)
+	if err != nil {
+		log.Errorf("Error getting absolute path for %s: %s\n", path, err)
+		return err
+	}
+
+	partial := viper.GetBool("partial")
+
+	// Check if file already exists based on hash type
+	res := db.Exists(absfilepath)
+	if (partial && (res == db.HashTypePartial || res == db.HashTypeFull)) ||
+		(!partial && res == db.HashTypeFull) {
+		log.Debugf("skipping: %s\n", path)
+		return nil
+	}
+
+	// Perform file operations
+	filename, size, hash, err := file.Hash(path)
+	/*
+		if err != nil {
+			log.Errorf("Error hashing file %s: %s\n", path, err)
+			return err
+		}
+	*/
+
+	// Skip empty files
+	if size == 0 {
+		log.Debugf("skipping empty file: %s\n", path)
+		return nil
+	}
+
+	db.Save(filename, size, hash)
+
+	return nil
+}
+
 func walkFunc(path string, info os.FileInfo, err error) error {
 	// handle situations when a file isn't really a file or directory
 	// usually files with really weird filenames on network drives
@@ -90,6 +159,11 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 		}
 	}()
 	partial := viper.GetBool("partial")
+
+	if err != nil {
+		log.Errorf("Error walking directory: %s\n", path)
+		return err
+	}
 
 	// We can't do anything to directories
 	if info.IsDir() {
@@ -125,7 +199,7 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 		log.Debugf("hashing: %s\n", path)
 
 	}
-	filename, size, hash := file.Hash(path)
+	filename, size, hash, err := file.Hash(path)
 	// TODO: This is a complete hack, the f.Stat call should be done here
 	// skip small files for now
 	if size == 0 {
@@ -134,13 +208,6 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 	}
 
 	db.Save(filename, size, hash)
-
-	/*
-		// dupe finding should really be a separate operation on the UI side
-			if db.Dupe(hash) {
-				fmt.Println("DUPE FOUND")
-			}
-	*/
 
 	return nil
 }
@@ -166,5 +233,6 @@ func scan(cmd *cobra.Command, args []string) {
 	}
 
 	db.Init()
-	filepath.Walk(args[0], walkFunc)
+	//filepath.Walk(args[0], walkFunc)
+	filepath.WalkDir(args[0], walkDirFunc)
 }
