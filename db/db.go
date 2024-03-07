@@ -123,6 +123,76 @@ const (
 	HashTypePartial HashType = "PARTIAL"
 )
 
+// Check the files in batches
+// TODO: Dis no worky
+func ExistsAllBatch(filenames []string) bool {
+
+	const batchMax = 10
+
+	db, err := sql.Open("sqlite3", viper.GetString("db"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	for i := 0; i < len(filenames); i += batchMax {
+		// Limit the batch size to 10
+		batchSize := min(batchMax, len(filenames)-i)
+		batch := filenames[i : i+batchSize]
+
+		// Build the IN clause
+		inClause := buildInClause(batch)
+
+		stmt, err := db.Prepare("select path from dupes where path IN " + inClause)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer stmt.Close()
+
+		// Execute the query with the IN clause
+		rows, err := stmt.Query(batch)
+
+		if err != nil {
+			log.Errorf("error checking files: %v", err)
+			return false
+		}
+		defer rows.Close()
+
+		// Count rows using `Next` loop
+		count := 0
+		for rows.Next() {
+			count++
+		}
+
+		if count != batchSize {
+			return false
+		}
+	}
+
+	return true
+}
+
+// Helper function to build the IN clause string
+func buildInClause(filenames []string) string {
+	inClause := "("
+	for i := range filenames {
+		if i > 0 {
+			inClause += ","
+		}
+		inClause += "?"
+	}
+	inClause += ")"
+	return inClause
+}
+
+// Helper function to get the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func ExistsAll(filenames []string) bool {
 	db, err := sql.Open("sqlite3", viper.GetString("db"))
 	if err != nil {

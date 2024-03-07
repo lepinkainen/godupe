@@ -21,8 +21,13 @@ THE SOFTWARE.
 */
 package main
 
-import "github.com/lepinkainen/godupe/cmd"
+import (
+	"github.com/lepinkainen/godupe/cmd"
+)
+
+var Version string
 
 func main() {
+	//fmt.Printf("Version %s\n", Version)
 	cmd.Execute()
 }

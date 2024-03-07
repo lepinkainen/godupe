@@ -79,6 +79,7 @@ func init() {
 	scanCmd.Flags().BoolP("partial", "p", false, "Only read the first X MiB of a file to generate a partial hash")
 	scanCmd.Flags().String("db", dbPath, "DB file to use")
 	scanCmd.Flags().Int64("limit", 2, "Amount of MiB to read when doing partial scan")
+	scanCmd.Flags().Bool("cache", false, "Cache processed files to a file")
 }
 
 func walkDirFunc(path string, d fs.DirEntry, err error) error {
@@ -86,22 +87,64 @@ func walkDirFunc(path string, d fs.DirEntry, err error) error {
 		log.Errorf("Error accessing directory: %s\n", path)
 		return err
 	}
+	abspath, err := filepath.Abs(path)
+	if err != nil {
+		log.Errorf("Error getting absolute path for %s: %s\n", path, err)
+	}
+
+	var hasSubdirs = false
+
+	// If this is a directory, check for subdirs and set flag
+	if d.IsDir() {
+		hasSubdirs, err = file.HasSubdirectories(abspath)
+		if err != nil {
+			log.Errorf("error determining subdirectories %v", err)
+			return err
+		}
+	}
+
+	if viper.GetBool("cache") {
+		cachedDirs := file.LoadCachedDirs()
+
+		// Skip if directory is in cache and doesn't have subdirectories
+		// else the subrids will never be processed
+		if !hasSubdirs {
+			if d.IsDir() && file.ContainsDir(cachedDirs, abspath) {
+				log.Infof("Skipping cached directory: %s (no subdirectories)", abspath)
+				return filepath.SkipDir
+			}
+		}
+	}
 
 	// Skip if all files are already in database
 	if d.IsDir() {
+
 		files, err := file.WalkDirFiles(path)
-		log.Infof("processing: %s [%d files]\n", path, len(files))
+		log.Infof("processing: %s [%d files]\n", abspath, len(files))
 		if err != nil {
 			return err
 		}
 
 		skip := db.ExistsAll(files)
 
+		// skip directories that have been fully processed (every file exists in DB)
 		if skip {
 			log.Debug("-> Skip - already processed")
-			return filepath.SkipDir
+
+			if viper.GetBool("cache") {
+				log.Infof("Caching: %s", abspath)
+				file.AddDirToCache(abspath)
+			}
+
+			// only fully skip directories with no subdirs
+			if !hasSubdirs {
+				return filepath.SkipDir
+			} else {
+				return nil
+			}
 		}
 
+		// don't process directories in general
 		return nil
 	}
 
@@ -131,12 +174,10 @@ func walkDirFunc(path string, d fs.DirEntry, err error) error {
 
 	// Perform file operations
 	filename, size, hash, err := file.Hash(path)
-	/*
-		if err != nil {
-			log.Errorf("Error hashing file %s: %s\n", path, err)
-			return err
-		}
-	*/
+	if err != nil {
+		log.Errorf("Error hashing file %s: %s\n", path, err)
+		return err
+	}
 
 	// Skip empty files
 	if size == 0 {
@@ -199,8 +240,14 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 		log.Debugf("hashing: %s\n", path)
 
 	}
-	filename, size, hash, err := file.Hash(path)
+
 	// TODO: This is a complete hack, the f.Stat call should be done here
+	filename, size, hash, err := file.Hash(path)
+	if err != nil {
+		log.Errorf("Error hashing file %s: %s\n", path, err)
+		return err
+	}
+
 	// skip small files for now
 	if size == 0 {
 		log.Debugf("skipping empty file: %s\n", path)
@@ -219,6 +266,7 @@ func scan(cmd *cobra.Command, args []string) {
 	viper.BindPFlag("partial", cmd.Flags().Lookup("partial"))
 	viper.BindPFlag("db", cmd.Flags().Lookup("db"))
 	viper.BindPFlag("limit", cmd.Flags().Lookup("limit"))
+	viper.BindPFlag("cache", cmd.Flags().Lookup("cache"))
 
 	//const mib = 1048576 // 1 MiB
 	//const partialSize = 2 * mib

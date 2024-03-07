@@ -42,7 +42,8 @@ func Hash(filename string) (string, int64, string, error) {
 
 	f, err := os.Open(absfile)
 	if err != nil {
-		log.Fatal(err)
+		log.Error(err)
+		return "", 0, "", err
 	}
 	defer f.Close()
 
@@ -51,11 +52,13 @@ func Hash(filename string) (string, int64, string, error) {
 		return "", 0, "", err
 	}
 
-	if info.Size() < 10*1024*1024 {
-		log.Debugf("Skipping small file: %s\n", filename)
-		// return error
-		return "", 0, "", fmt.Errorf("Skipping small file: %s", filename)
-	}
+	/*
+		if info.Size() < 10*1024*1024 {
+			log.Debugf("Skipping small file: %s\n", filename)
+			// return error
+			return "", 0, "", fmt.Errorf("skipping small file: %s", filename)
+		}
+	*/
 
 	var hashSize int64
 	// If file is smaller than partial size, don't try to read more than the file's size
@@ -97,4 +100,30 @@ func Exists(filename string) bool {
 		return false
 	}
 	return true
+}
+
+// Helper function to check for subdirectories
+func HasSubdirectories(dir string) (bool, error) {
+	f, err := os.Open(dir)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+
+	names, err := f.Readdirnames(0) // Get a list of directory entries
+	if err != nil {
+		return false, err
+	}
+
+	for _, name := range names {
+		finfo, err := os.Stat(filepath.Join(dir, name))
+		if err != nil {
+			return false, err
+		}
+		if finfo.IsDir() {
+			return true, nil // Found a subdirectory
+		}
+	}
+
+	return false, nil // No subdirectories found
 }
